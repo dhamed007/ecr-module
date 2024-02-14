@@ -24,3 +24,10 @@ EOF
  lifecycle_policy {
     policy_text = var.lifecycle_policy
   }
+
+resource "aws_ecr_repository" "main" {
+  name = var.name
+
+  lifecycle_policy {
+    policy_text = var.lifecycle_policy
+  }
