@@ -1,134 +1,99 @@
-variable "domain_name" {
-  description = "The name of the CodeArtifact domain"
+module "ecr_repository" {
+  source = "./path/to/ecr-module"  # Path to your ECR module directory
+
+  name                 = var.name
+  tags                 = var.tags
+  image_tag_mutability = var.image_tag_mutability
+  scan_image_on_push   = var.scan_image_on_push
+  lifecycle_policy     = var.lifecycle_policy
+  encryption_type      = var.encryption_type
+  kms_key              = var.kms_key
 }
 
-variable "repository_name" {
-  description = "The name of the CodeArtifact repository"
+resource "aws_ecr_repository_policy" "main" {
+  count      = local.create_ecr_policy
+  repository = module.ecr_repository.name
+
+  policy = local.ecr_policy
 }
 
-variable "kms_key_description" {
-  description = "The description for the KMS key"
-}
---
-resource "aws_kms_key" "codeartifact_key" {
-  description = var.kms_key_description
-}
-
-resource "aws_codeartifact_domain" "codeartifact_domain" {
-  domain         = var.domain_name
-  encryption_key = aws_kms_key.codeartifact_key.arn
-}
-
-resource "aws_codeartifact_repository" "codeartifact_repository" {
-  repository = var.repository_name
-  domain     = aws_codeartifact_domain.codeartifact_domain.domain
-
-  external_connections {
-    external_connection_name = "public:maven-central"
-  }
+resource "aws_ecr_lifecycle_policy" "main" {
+  count      = local.create_lifecycle_policy
+  repository = module.ecr_repository.name
+  policy     = local.lifecycle_policy
 }
 ---
-output "maven_settings" {
-  value = <<-EOT
-    <settings>
-      <mirrors>
-        <mirror>
-          <id>codeartifact</id>
-          <mirrorOf>*,!maven-central</mirrorOf>
-          <url>https://${aws_codeartifact_domain.codeartifact_domain.domain}.d.codeartifact.${var.region}.amazonaws.com/maven/${var.repository_name}/</url>
-          <settings>
-            <xmlui>false</xmlui>
-          </settings>
-        </mirror>
-      </mirrors>
-    </settings>
-  EOT
-}resource "aws_codeartifact_domain_permissions_policy" "examplea" {
-  domain          = aws_codeartifact_domain.examplea.domain
-  policy_document = <<EOF
+name                 = "your-ecr-repository-name"
+tags                 = {
+  Name        = "YourECRRepositoryName"
+  Environment = "YourEnvironment"
+  # Add more tags as needed
+}
+image_tag_mutability = "IMMUTABLE"
+scan_image_on_push   = true
+lifecycle_policy     = <<EOF
 {
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": "codeartifact:CreateRepository",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Resource": "${aws_codeartifact_domain.examplea.arn}"
-        }
-    ]
+  "rules": [
+    {
+      "rulePriority": 1,
+      "description": "Expire untagged images older than 30 days",
+      "selection": {
+        "tagStatus": "untagged",
+        "countType": "sinceImagePushed",
+        "countUnit": "days",
+        "countNumber": 30
+      },
+      "action": {
+        "type": "expire"
+      }
+    }
+  ]
 }
 EOF
-}
+encryption_type = "AES256"
+kms_key         = null  # If using KMS encryption, provide the ARN of the KMS key, otherwise leave as null
 ---
-
---------------------------------
-
-resource "aws_codeartifact_domain" "examplea" {
-  domain         = var.domain
-  encryption_key = var.kms_key.arn
-  tags           = var.common_tags
+variable "name" {
+  description = "ECR Repository Name"
 }
----
 
-resource "aws_codeartifact_repository" "examplea" {
-  repository = var.repository
-  domain     = aws_codeartifact_domain.examplea.domain
-  tags       = var.common_tags
-}
----
-
-resource "aws_codeartifact_domain_permissions_policy" "examplea" {
-  domain          = aws_codeartifact_domain.examplea.domain
-  policy_document = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": "codeartifact:CreateRepository",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Resource": "${aws_codeartifact_domain.examplea.arn}"
-        }
-    ]
-}
-EOF
-}
----
-resource "aws_codeartifact_repository_permissions_policy" "examplea" {
-  repository      = aws_codeartifact_repository.examplea.repository
-  domain          = aws_codeartifact_domain.examplea.domain
-  policy_document = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Action": "codeartifact:CreateRepository",
-            "Effect": "Allow",
-            "Principal": "*",
-            "Resource": "${aws_codeartifact_domain.examplea.arn}"
-        }
-    ]
-}
-EOF
-}
----
-
-
-variable "common_tags" {
-  description = "This is to help you add tags to your cloud objects"
+variable "tags" {
   type        = map(any)
+  description = "(Required) Map of tags to apply to repository"
+  default     = {}
 }
 
-variable "repository" {
-  type    = string
-  default = "freebeer"
+variable "image_tag_mutability" {
+  default     = "IMMUTABLE"
+  description = "Image tag immutablity MUTABLE/IMMUTABLE"
 }
 
-variable "domain" {
-  type    = string
-  default = "freebeer"
+variable "scan_image_on_push" {
+  default     = true
+  description = "Scan image for vulnerabilities on push"
+}
+
+variable "lifecycle_policy" {
+  default     = null
+  description = "ECR lifecycle policy (jsonencoded)"
+}
+
+variable "encryption_type" {
+  description = "(Optional) The encryption type to use for the repository. Valid values are AES256 or KMS. Defaults to AES256"
+  default     = "AES256"
 }
 
 variable "kms_key" {
+  description = "(Optional) The ARN of the KMS key to use when encryption_type is KMS. If not specified, uses the default AWS managed key for ECR"
+  default     = null
+}
 
+variable "create_ecr_policy" {
+  type    = bool
+  default = false
+}
+
+variable "create_lifecycle_policy" {
+  type    = bool
+  default = true
 }
