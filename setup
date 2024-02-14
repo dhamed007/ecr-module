@@ -1,62 +1,46 @@
-variable "lifecycle_policy" {
-  type = string
-  default = <<EOF
-{
-  "rules": [
-    {
-      "rulePriority": 1,
-      "description": "Expire images older than 30 days",
-      "selection": {
-        "tagStatus": "any",
-        "countType": "sinceImagePushed",
-        "countUnit": "days",
-        "countNumber": 30
-      },
-      "action": {
-        "type": "expire"
-      }
-    }
-  ]
+variable "domain_name" {
+  description = "The name of the CodeArtifact domain"
 }
-EOF
+
+variable "repository_name" {
+  description = "The name of the CodeArtifact repository"
+}
+
+variable "kms_key_description" {
+  description = "The description for the KMS key"
+}
+--
+resource "aws_kms_key" "codeartifact_key" {
+  description = var.kms_key_description
+}
+
+resource "aws_codeartifact_domain" "codeartifact_domain" {
+  domain         = var.domain_name
+  encryption_key = aws_kms_key.codeartifact_key.arn
+}
+
+resource "aws_codeartifact_repository" "codeartifact_repository" {
+  repository = var.repository_name
+  domain     = aws_codeartifact_domain.codeartifact_domain.domain
+
+  external_connections {
+    external_connection_name = "public:maven-central"
+  }
 }
 ---
- lifecycle_policy {
-    policy_text = var.lifecycle_policy
-  }
-
-resource "aws_ecr_repository" "main" {
-  name = var.name
-
-  lifecycle_policy {
-    policy_text = var.lifecycle_policy
-  }
-
-resource "aws_ecr_repository" "main" {
-  name                 = var.name
-  image_tag_mutability = var.image_tag_mutability
-
-  image_scanning_configuration {
-    scan_on_push = var.scan_image_on_push
-  }
-
-  encryption_configuration {
-    encryption_type = var.encryption_type
-    kms_key         = var.kms_key
-  }
-
-  lifecycle_policy {
-    policy_text = var.lifecycle_policy
-  }
-
-  tags = merge(
-    var.tags,
-    tomap({ "Name" = var.name })
-  )
-}
-
-resource "aws_ecr_repository_policy" "main" {
-  count      = local.create_ecr_policy
-  repository = aws_ecr_repository.main.name
-  policy     = local.ecr_policy
+output "maven_settings" {
+  value = <<-EOT
+    <settings>
+      <mirrors>
+        <mirror>
+          <id>codeartifact</id>
+          <mirrorOf>*,!maven-central</mirrorOf>
+          <url>https://${aws_codeartifact_domain.codeartifact_domain.domain}.d.codeartifact.${var.region}.amazonaws.com/maven/${var.repository_name}/</url>
+          <settings>
+            <xmlui>false</xmlui>
+          </settings>
+        </mirror>
+      </mirrors>
+    </settings>
+  EOT
 }
