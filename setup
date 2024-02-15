@@ -1,5 +1,6 @@
-resource "aws_codeartifact_domain" "codeartifact_domain" {
-  domain         = var.name
+# Create a CodeArtifact domain
+resource "aws_codeartifact_domain" "aoi_codeartifact_domain" {
+  domain         = var.domain_name
   encryption_key = aws_kms_key.codeartifact_key.arn
 
   tags = merge(
@@ -8,23 +9,94 @@ resource "aws_codeartifact_domain" "codeartifact_domain" {
   )
 }
 
-resource "aws_codeartifact_repository" "codeartifact_repository" {
-  repository = var.name
-  domain     = aws_codeartifact_domain.codeartifact_domain.domain
+# Create an IAM policy document for the domain
+data "aws_iam_policy_document" "domain_policy" {
+  statement {
+    effect    = "Allow"
+    actions   = ["codeartifact:GetPackageVersionReadme"]
+    resources = [aws_codeartifact_domain.aoi_codeartifact_domain.arn]
+  }
+}
+
+# Attach the IAM policy document to the domain
+resource "aws_codeartifact_domain_permissions_policy" "domain_policy" {
+  domain          = aws_codeartifact_domain.aoi_codeartifact_domain.domain
+  policy_document = data.aws_iam_policy_document.domain_policy.json
+}
+
+# Create an internal CodeArtifact repository
+resource "aws_codeartifact_repository" "internal_repository" {
+  repository = "internal-repo"
+  domain     = aws_codeartifact_domain.aoi_codeartifact_domain.domain
 
   tags = merge(
     var.tags,
-    var.repository_tags
+    var.internal_repository_tags
   )
 }
 
+# Create an external CodeArtifact repository
+resource "aws_codeartifact_repository" "external_repository" {
+  repository = "external-repo"
+  domain     = aws_codeartifact_domain.aoi_codeartifact_domain.domain
+
+  tags = merge(
+    var.tags,
+    var.external_repository_tags
+  )
+}
+
+# Create an IAM policy document for the internal repository
+data "aws_iam_policy_document" "internal_repository_policy" {
+  statement {
+    effect    = "Allow"
+    actions   = ["codeartifact:DescribePackageVersion"]
+    resources = [aws_codeartifact_repository.internal_repository.arn]
+  }
+}
+
+# Attach the IAM policy document to the internal repository
+resource "aws_codeartifact_repository_permissions_policy" "internal_repository_policy" {
+  repository      = aws_codeartifact_repository.internal_repository.repository
+  domain          = aws_codeartifact_domain.aoi_codeartifact_domain.domain
+  policy_document = data.aws_iam_policy_document.internal_repository_policy.json
+}
+
+# Create an IAM policy document for the external repository
+data "aws_iam_policy_document" "external_repository_policy" {
+  statement {
+    effect    = "Allow"
+    actions   = ["codeartifact:DescribePackageVersion"]
+    resources = [aws_codeartifact_repository.external_repository.arn]
+  }
+}
+
+# Attach the IAM policy document to the external repository
+resource "aws_codeartifact_repository_permissions_policy" "external_repository_policy" {
+  repository      = aws_codeartifact_repository.external_repository.repository
+  domain          = aws_codeartifact_domain.aoi_codeartifact_domain.domain
+  policy_document = data.aws_iam_policy_document.external_repository_policy.json
+}
+
+# Define upstream repository
+resource "aws_codeartifact_repository_external_connection" "maven_upstream" {
+  repository = aws_codeartifact_repository.internal_repository.repository
+
+  external_connection {
+    external_connection_name = "maven-upstream"
+    package_format           = "maven"
+    status                   = "Available"
+  }
+}
 ---
-variable "name" {
-  description = "The name of the CodeArtifact domain or repository"
+
+variable "domain_name" {
+  description = "The name of the CodeArtifact domain"
+  type        = string
 }
 
 variable "tags" {
-  description = "A map of tags to assign to the CodeArtifact domain or repository"
+  description = "A map of tags to assign to resources"
   type        = map(string)
   default     = {}
 }
@@ -35,33 +107,113 @@ variable "domain_tags" {
   default     = {}
 }
 
-variable "repository_tags" {
-  description = "A map of tags to assign to the CodeArtifact repository"
+variable "internal_repository_tags" {
+  description = "A map of tags to assign to the internal repository"
   type        = map(string)
   default     = {}
 }
+
+variable "external_repository_tags" {
+  description = "A map of tags to assign to the external repository"
+  type        = map(string)
+  default     = {}
+}
+
 ---
-module "codeartifact" {
-  source            = "./path/to/codeartifact-module"
-  name              = "my-codeartifact-repository"
-  tags              = {
-    Environment = "Development"
-    Project     = "MyProject"
-    Owner       = "John Doe"
-    CostCenter  = "12345"
-    # Additional tags as needed
+output "domain_id" {
+  description = "The ID of the created CodeArtifact domain"
+  value       = aws_codeartifact_domain.aoi_codeartifact_domain.id
+}
+
+output "internal_repository_id" {
+  description = "The ID of the internal CodeArtifact repository"
+  value       = aws_codeartifact_repository.internal_repository.id
+}
+
+output "external_repository_id" {
+  description = "The ID of the external CodeArtifact repository"
+  value       = aws_codeartifact_repository.external_repository.id
+}
+
+---
+main.tf:
+provider "aws" {
+  region = "us-west-2"  # Specify your desired region
+}
+
+module "codeartifact_setup" {
+  source = "./path/to/your/module"  # Update the source with the path to your module
+
+  domain_name               = "example-domain"  # Specify your desired domain name
+  tags                      = {
+    "Environment" = "Dev",
+    "Creator"       = "Enoch"
+    "Project"      =  "AOI-Project"
   }
-  domain_tags       = {
-    Environment = "Development"
-    Project     = "MyProject"
-    Owner       = "John Doe"
-    # Additional tags as needed
+  domain_tags               = {
+    "Project" = "AOI-Project",
+    "Team"    = "TeamA"
   }
-  repository_tags   = {
-    Environment = "Development"
-    Project     = "MyProject"
-    Owner       = "John Doe"
-    CostCenter  = "12345"
-    # Additional tags as needed
+  internal_repository_tags = {
+    "Project" = "AOI-Project",
+    "Team"    = "TeamA"
+  }
+  external_repository_tags = {
+    "Project" = "AOI-Project",
+    "Team"    = "TeamA"
   }
 }
+---
+# Specify the domain name
+domain_name = "example-domain"
+
+# Specify the tags for the resources
+tags = {
+  "Environment" = "Production",
+  "Owner"       = "Team XYZ"
+}
+
+# Specify the tags for the domain
+domain_tags = {
+  "Project" = "MyProject",
+  "Team"    = "TeamA"
+}
+
+# Specify the tags for the internal repository
+internal_repository_tags = {
+  "Project" = "MyProject",
+  "Team"    = "TeamA"
+}
+
+# Specify the tags for the external repository
+external_repository_tags = {
+  "Project" = "MyProject",
+  "Team"    = "TeamA"
+}
+---
+variable "domain_name" {
+  description = "The name of the CodeArtifact domain"
+  type        = string
+}
+
+variable "tags" {
+  description = "A map of tags to assign to resources"
+  type        = map(string)
+}
+
+variable "domain_tags" {
+  description = "A map of tags to assign to the CodeArtifact domain"
+  type        = map(string)
+}
+
+variable "internal_repository_tags" {
+  description = "A map of tags to assign to the internal repository"
+  type        = map(string)
+}
+
+variable "external_repository_tags" {
+  description = "A map of tags to assign to the external repository"
+  type        = map(string)
+}
+
+---
