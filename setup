@@ -97,3 +97,19 @@ variable "create_lifecycle_policy" {
   type    = bool
   default = true
 }
+
+  tags = merge(
+    var.tags,
+    tomap(
+      {
+        "Environment"    = var.environment,
+        "Name"           = var.name,
+        "Project"        = var.project,
+        "Owner"          = var.owner,
+        "CostCenter"     = var.cost_center,
+        "ExpirationDate" = var.expiration_date,
+        # Add more custom tags as needed
+      }
+    )
+  )
+}
