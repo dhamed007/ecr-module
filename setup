@@ -1,115 +1,67 @@
-module "ecr_repository" {
-  source = "./path/to/ecr-module"  # Path to your ECR module directory
-
-  name                 = var.name
-  tags                 = var.tags
-  image_tag_mutability = var.image_tag_mutability
-  scan_image_on_push   = var.scan_image_on_push
-  lifecycle_policy     = var.lifecycle_policy
-  encryption_type      = var.encryption_type
-  kms_key              = var.kms_key
-}
-
-resource "aws_ecr_repository_policy" "main" {
-  count      = local.create_ecr_policy
-  repository = module.ecr_repository.name
-
-  policy = local.ecr_policy
-}
-
-resource "aws_ecr_lifecycle_policy" "main" {
-  count      = local.create_lifecycle_policy
-  repository = module.ecr_repository.name
-  policy     = local.lifecycle_policy
-}
----
-name                 = "your-ecr-repository-name"
-tags                 = {
-  Name        = "YourECRRepositoryName"
-  Environment = "YourEnvironment"
-  # Add more tags as needed
-}
-image_tag_mutability = "IMMUTABLE"
-scan_image_on_push   = true
-lifecycle_policy     = <<EOF
-{
-  "rules": [
-    {
-      "rulePriority": 1,
-      "description": "Expire untagged images older than 30 days",
-      "selection": {
-        "tagStatus": "untagged",
-        "countType": "sinceImagePushed",
-        "countUnit": "days",
-        "countNumber": 30
-      },
-      "action": {
-        "type": "expire"
-      }
-    }
-  ]
-}
-EOF
-encryption_type = "AES256"
-kms_key         = null  # If using KMS encryption, provide the ARN of the KMS key, otherwise leave as null
----
-variable "name" {
-  description = "ECR Repository Name"
-}
-
-variable "tags" {
-  type        = map(any)
-  description = "(Required) Map of tags to apply to repository"
-  default     = {}
-}
-
-variable "image_tag_mutability" {
-  default     = "IMMUTABLE"
-  description = "Image tag immutablity MUTABLE/IMMUTABLE"
-}
-
-variable "scan_image_on_push" {
-  default     = true
-  description = "Scan image for vulnerabilities on push"
-}
-
-variable "lifecycle_policy" {
-  default     = null
-  description = "ECR lifecycle policy (jsonencoded)"
-}
-
-variable "encryption_type" {
-  description = "(Optional) The encryption type to use for the repository. Valid values are AES256 or KMS. Defaults to AES256"
-  default     = "AES256"
-}
-
-variable "kms_key" {
-  description = "(Optional) The ARN of the KMS key to use when encryption_type is KMS. If not specified, uses the default AWS managed key for ECR"
-  default     = null
-}
-
-variable "create_ecr_policy" {
-  type    = bool
-  default = false
-}
-
-variable "create_lifecycle_policy" {
-  type    = bool
-  default = true
-}
+resource "aws_codeartifact_domain" "codeartifact_domain" {
+  domain         = var.name
+  encryption_key = aws_kms_key.codeartifact_key.arn
 
   tags = merge(
     var.tags,
-    tomap(
-      {
-        "Environment"    = var.environment,
-        "Name"           = var.name,
-        "Project"        = var.project,
-        "Owner"          = var.owner,
-        "CostCenter"     = var.cost_center,
-        "ExpirationDate" = var.expiration_date,
-        # Add more custom tags as needed
-      }
-    )
+    var.domain_tags
   )
+}
+
+resource "aws_codeartifact_repository" "codeartifact_repository" {
+  repository = var.name
+  domain     = aws_codeartifact_domain.codeartifact_domain.domain
+
+  tags = merge(
+    var.tags,
+    var.repository_tags
+  )
+}
+
+---
+variable "name" {
+  description = "The name of the CodeArtifact domain or repository"
+}
+
+variable "tags" {
+  description = "A map of tags to assign to the CodeArtifact domain or repository"
+  type        = map(string)
+  default     = {}
+}
+
+variable "domain_tags" {
+  description = "A map of tags to assign to the CodeArtifact domain"
+  type        = map(string)
+  default     = {}
+}
+
+variable "repository_tags" {
+  description = "A map of tags to assign to the CodeArtifact repository"
+  type        = map(string)
+  default     = {}
+}
+---
+module "codeartifact" {
+  source            = "./path/to/codeartifact-module"
+  name              = "my-codeartifact-repository"
+  tags              = {
+    Environment = "Development"
+    Project     = "MyProject"
+    Owner       = "John Doe"
+    CostCenter  = "12345"
+    # Additional tags as needed
+  }
+  domain_tags       = {
+    Environment = "Development"
+    Project     = "MyProject"
+    Owner       = "John Doe"
+    # Additional tags as needed
+  }
+  repository_tags   = {
+    Environment = "Development"
+    Project     = "MyProject"
+    Owner       = "John Doe"
+    CostCenter  = "12345"
+    # Additional tags as needed
+  }
 }
