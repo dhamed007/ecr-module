@@ -1,219 +1,33 @@
-# Create a CodeArtifact domain
-resource "aws_codeartifact_domain" "aoi_codeartifact_domain" {
-  domain         = var.domain_name
-  encryption_key = aws_kms_key.codeartifact_key.arn
+Subject: Implementing a Comprehensive Tagging Strategy for Improved Infrastructure Management
 
-  tags = merge(
-    var.tags,
-    var.domain_tags
-  )
-}
+Hi Nitin,
 
-# Create an IAM policy document for the domain
-data "aws_iam_policy_document" "domain_policy" {
-  statement {
-    effect    = "Allow"
-    actions   = ["codeartifact:GetPackageVersionReadme"]
-    resources = [aws_codeartifact_domain.aoi_codeartifact_domain.arn]
-  }
-}
+I hope this email finds you well.
 
-# Attach the IAM policy document to the domain
-resource "aws_codeartifact_domain_permissions_policy" "domain_policy" {
-  domain          = aws_codeartifact_domain.aoi_codeartifact_domain.domain
-  policy_document = data.aws_iam_policy_document.domain_policy.json
-}
+I wanted to touch base with you regarding the recent enhancements we've made to our infrastructure management practices, particularly in the area of tagging strategy implementation. I'm excited to share with you the details of our new tagging strategy and the significant benefits it brings to our organization.
 
-# Create an internal CodeArtifact repository
-resource "aws_codeartifact_repository" "internal_repository" {
-  repository = "internal-repo"
-  domain     = aws_codeartifact_domain.aoi_codeartifact_domain.domain
+Tagging Strategy Overview:
 
-  tags = merge(
-    var.tags,
-    var.internal_repository_tags
-  )
-}
+As part of our ongoing efforts to streamline and optimize our infrastructure management processes, we have implemented a comprehensive tagging strategy across all our resources in the cloud environment. This tagging strategy involves assigning descriptive metadata tags to each resource based on attributes such as environment, owner, application, cost center, and more.
 
-# Create an external CodeArtifact repository
-resource "aws_codeartifact_repository" "external_repository" {
-  repository = "external-repo"
-  domain     = aws_codeartifact_domain.aoi_codeartifact_domain.domain
+Benefits of the Tagging Strategy:
 
-  tags = merge(
-    var.tags,
-    var.external_repository_tags
-  )
-}
+Enhanced Visibility and Organization: With well-defined tags applied to our resources, we now have improved visibility into our infrastructure, allowing us to easily identify and categorize resources based on their purpose, ownership, and other relevant attributes. This enhanced organization enables us to navigate and manage our infrastructure more efficiently.
 
-# Create an IAM policy document for the internal repository
-data "aws_iam_policy_document" "internal_repository_policy" {
-  statement {
-    effect    = "Allow"
-    actions   = ["codeartifact:DescribePackageVersion"]
-    resources = [aws_codeartifact_repository.internal_repository.arn]
-  }
-}
+Cost Allocation and Optimization: By tagging resources with attributes such as cost center and environment, we gain better insights into resource utilization and associated costs. This facilitates accurate cost allocation and enables us to identify opportunities for cost optimization by identifying underutilized or unnecessary resources.
 
-# Attach the IAM policy document to the internal repository
-resource "aws_codeartifact_repository_permissions_policy" "internal_repository_policy" {
-  repository      = aws_codeartifact_repository.internal_repository.repository
-  domain          = aws_codeartifact_domain.aoi_codeartifact_domain.domain
-  policy_document = data.aws_iam_policy_document.internal_repository_policy.json
-}
+Resource Lifecycle Management: The tagging strategy facilitates effective resource lifecycle management by providing clear ownership and accountability for each resource. With designated tags indicating the resource owner and application, we can easily track resource usage, identify stale resources, and enforce appropriate resource decommissioning processes.
 
-# Create an IAM policy document for the external repository
-data "aws_iam_policy_document" "external_repository_policy" {
-  statement {
-    effect    = "Allow"
-    actions   = ["codeartifact:DescribePackageVersion"]
-    resources = [aws_codeartifact_repository.external_repository.arn]
-  }
-}
+Automation and Governance: Tags serve as valuable metadata that can be leveraged for automation and governance purposes. By incorporating tags into our automation scripts and policies, we can automate resource provisioning, enforce compliance policies, and implement governance controls based on predefined tagging criteria.
 
-# Attach the IAM policy document to the external repository
-resource "aws_codeartifact_repository_permissions_policy" "external_repository_policy" {
-  repository      = aws_codeartifact_repository.external_repository.repository
-  domain          = aws_codeartifact_domain.aoi_codeartifact_domain.domain
-  policy_document = data.aws_iam_policy_document.external_repository_policy.json
-}
+Simplified Monitoring and Reporting: Tag-based monitoring and reporting allow us to generate customized reports and dashboards tailored to specific business requirements. We can monitor resource utilization, track cost trends, and analyze performance metrics based on tag-based filters, providing valuable insights for decision-making and optimization efforts.
 
-# Define upstream repository
-resource "aws_codeartifact_repository_external_connection" "maven_upstream" {
-  repository = aws_codeartifact_repository.internal_repository.repository
+Next Steps:
 
-  external_connection {
-    external_connection_name = "maven-upstream"
-    package_format           = "maven"
-    status                   = "Available"
-  }
-}
----
+Moving forward, we will continue to refine and optimize our tagging strategy to ensure alignment with evolving business needs and industry best practices. We encourage all team members to adhere to tagging standards and guidelines to maximize the benefits of this strategy across our organization.
 
-variable "domain_name" {
-  description = "The name of the CodeArtifact domain"
-  type        = string
-}
+If you have any questions or suggestions regarding the tagging strategy or its implementation, please feel free to reach out. Your feedback is highly valued as we strive to continuously improve our infrastructure management practices.
 
-variable "tags" {
-  description = "A map of tags to assign to resources"
-  type        = map(string)
-  default     = {}
-}
+Thank you for your attention, and I look forward to your continued support in driving efficiency and excellence in our infrastructure operations.
 
-variable "domain_tags" {
-  description = "A map of tags to assign to the CodeArtifact domain"
-  type        = map(string)
-  default     = {}
-}
-
-variable "internal_repository_tags" {
-  description = "A map of tags to assign to the internal repository"
-  type        = map(string)
-  default     = {}
-}
-
-variable "external_repository_tags" {
-  description = "A map of tags to assign to the external repository"
-  type        = map(string)
-  default     = {}
-}
-
----
-output "domain_id" {
-  description = "The ID of the created CodeArtifact domain"
-  value       = aws_codeartifact_domain.aoi_codeartifact_domain.id
-}
-
-output "internal_repository_id" {
-  description = "The ID of the internal CodeArtifact repository"
-  value       = aws_codeartifact_repository.internal_repository.id
-}
-
-output "external_repository_id" {
-  description = "The ID of the external CodeArtifact repository"
-  value       = aws_codeartifact_repository.external_repository.id
-}
-
----
-main.tf:
-provider "aws" {
-  region = "us-west-2"  # Specify your desired region
-}
-
-module "codeartifact_setup" {
-  source = "./path/to/your/module"  # Update the source with the path to your module
-
-  domain_name               = "example-domain"  # Specify your desired domain name
-  tags                      = {
-    "Environment" = "Dev",
-    "Creator"       = "Enoch"
-    "Project"      =  "AOI-Project"
-  }
-  domain_tags               = {
-    "Project" = "AOI-Project",
-    "Team"    = "TeamA"
-  }
-  internal_repository_tags = {
-    "Project" = "AOI-Project",
-    "Team"    = "TeamA"
-  }
-  external_repository_tags = {
-    "Project" = "AOI-Project",
-    "Team"    = "TeamA"
-  }
-}
----
-# Specify the domain name
-domain_name = "example-domain"
-
-# Specify the tags for the resources
-tags = {
-  "Environment" = "Production",
-  "Owner"       = "Team XYZ"
-}
-
-# Specify the tags for the domain
-domain_tags = {
-  "Project" = "MyProject",
-  "Team"    = "TeamA"
-}
-
-# Specify the tags for the internal repository
-internal_repository_tags = {
-  "Project" = "MyProject",
-  "Team"    = "TeamA"
-}
-
-# Specify the tags for the external repository
-external_repository_tags = {
-  "Project" = "MyProject",
-  "Team"    = "TeamA"
-}
----
-variable "domain_name" {
-  description = "The name of the CodeArtifact domain"
-  type        = string
-}
-
-variable "tags" {
-  description = "A map of tags to assign to resources"
-  type        = map(string)
-}
-
-variable "domain_tags" {
-  description = "A map of tags to assign to the CodeArtifact domain"
-  type        = map(string)
-}
-
-variable "internal_repository_tags" {
-  description = "A map of tags to assign to the internal repository"
-  type        = map(string)
-}
-
-variable "external_repository_tags" {
-  description = "A map of tags to assign to the external repository"
-  type        = map(string)
-}
-
----
+Best regards,
